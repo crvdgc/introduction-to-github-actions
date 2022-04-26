@@ -8,28 +8,30 @@ date: 2022-04
 
 ## What is CI/CD
 
-Continuous Integration & Continuous Delivery
+Integration & Delivery
 
 $$
     \framebox{Devlopment} \rightarrow \framebox{Test} \rightarrow \framebox{Deployment}
 $$
 
+- CI: Continuous Integration
+- CD: Continuous Delivery
+
 \pause
 
 **Continuous**: make above steps interwoven, rather than in batches.
 
-\pause
-
 For this, we need **automation**.
 
-## GitHub Actions
+## GitHub Actions overview
 
 \columnsbegin
 \column{.5\textwidth}
+\footnotesize
 
 ```yaml
 name: learn-github-actions
-on: [push]
+on: push
 jobs:
   check-bats-version:
     runs-on: ubuntu-latest
@@ -42,164 +44,230 @@ jobs:
       - run: bats -v
 ```
 
+\normalsize
 \column{.5\textwidth}
 
-Set-up hierarchy:
+Setup hierarchy:
 
 - **Workflow**: a configuration file
 - **Job**: a set of *steps* that can execute in parallel
 - **Step**: an *action* or a script
-- **Action**: a configurable and reusable script
+- **Action**: a configurable and reusable script (c.f. a function)
 
 \columnsend
 
-## GitHub Actions (Cont.)
+## GitHub Actions overview (Cont.)
 
 ![Runtime overview](assets/img/overview-actions-simple.png)
 
-## Benefits of GitHub Actions over Buildkite
+\extrafootnote{https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions}
+
+## Advantages of GitHub Actions
 
 - Cost
-  - Free for public repository
-  - Free for self-host runners for private repository
-  - Buildkite: per user
-- Integration with GitHub
-  - Do not need to grant additional access to the repository
-  - UI
+  - Free hosted runners for **public** repository
+  - Free self-hosted runners for **private** repository
+  - c.f. Buildkite: per user charge
 
-# Basics
+\pause
 
-## Function
+> - Integration with GitHub
+>   - No need for additional access to the repository
+>   - No need for additional access to the runner
+>   - No need for CI access management
+>     - Read access to the repository $\rightarrow$ read access to CI
+>     - Write access to the repository $\rightarrow$ write access to CI
+>   - Embedded UI
 
+## Security policy
 
-# Examples
+- **DO NOT** use self-hosted runners for a public repository
+  - Risk: allow arbitrary code execution on your machine.
+  - Configurable requirement for PR: e.g. approval from someone with write access.
 
-## Sequence of argument or argument of sequence
+\pause
 
-```python
-x0: Tensor = torch.rand(10, 32, 512)
-x1: Tensor = torch.rand(20, 32, 512)
-x: Tensor = torch.cat(x0, x1)
+- Secrets from settings: `${{ secrets.PASSWORD }}`
+  - For self-hosted runners, store on the machine instead.
+
+# Techniques
+
+## Triggering a workflow
+
+```yaml
+on: push
 ```
 
 \pause
 
-```
-[Pyright reportGeneralTypeIssues] [E] ...
-  Type "Tensor" cannot be assigned to type "Tuple[Tensor, ...]
-    | List[Tensor]"
-    "Tensor" is incompatible with "Tuple[Tensor, ...]"
-    "Tensor" is incompatible with "List[Tensor]"
+```yaml
+on:
+  push:
+    branches:
+      - 'releases/**'
+      - '!releases/**-alpha'
 ```
 
-However, `rand` is polymorphic and accept both.
+\extrafootnote{https://docs.github.com/en/actions/using-workflows/triggering-a-workflow}
+
+## Jobs: dependency
+
+Jobs run in parallel and may be assigned to different runners.
+
+```yaml
+jobs:
+  job1:
+  job2:
+    needs: job1
+  job3:
+    if: ${{ always() }}
+    needs: [job1, job2]
+```
+
+\extrafootnote{https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions}
+
+## Jobs: runner selection
+
+Use a set of labels to select a runner.
+
+- Hosted
+  - `runs-on: windows-latest`
+- Self-hosted
+  - `runs-on: [self-hosted, x86_64-linux, docker]`
 
 \pause
 
-```python
-x: Tensor = torch.cat((x0, x1))
-```
+When registering runners, set corresponding labels.
 
-# Advanced typing
+## Build matrix
 
-## How to describe a duck
-
-```python
-n_books: int = 30
-book_noun: str = "book" if n_books == 1 else "books"
-summary: str = "We have {} {}.".format(n_books, book_noun)
-```
-
-An `int` and a `str` can both be used in `format`, since they both implement the `__format__` method.
-
-**Duck typing** checks if the value has the required capabilities.
+Procedurally generate build configuration combinations.
 
 \pause
 
-How to describe and check?
+\footnotesize
 
-## How to describe a duck (Cont.)
-
-In general, inheritance from an Abstract Base Class (ABC)
-
-```python
-class Location(ABC):
-    @abstractmethod
-    def get_address(self) -> Address:
-        pass
-
-class Library(Location):
-    def get_address(self) -> Address:
-        return self.address
+```yaml
+runs-on: ${{ matrix.os }}
+strategy:
+  matrix:
+    node: [8, 10, 12, 14]
+    os: [macos-latest, windows-latest, ubuntu-18.04]
+    include:
+      - os: ubuntu-18.04
+        node: 15
+    exclude:
+      - os: macos-latest
+        node: 8
 ```
 
-## How to describe a duck (Cont.)
+\normalsize
 
-For some known methods (methods with "magic names" `__`), there are pre-defined [ABCs](https://docs.python.org/3/library/collections.abc.html).
+\extrafootnote{https://docs.github.com/en/actions/using-jobs/using-a-build-matrix-for-your-jobs}
 
-| ABC       | Abstract methods | Example usage       |
-|:---------:|:-----------------|:--------------------|
-| Container | `__contains__`   | `book in shelf`     |
-| Iterable  | `__iter__`       | `for book in shelf` |
-| Sized     | `__len__`        | `len(shelf)`        |
-| ...       | ...              | ...                 |
 
-Per [PEP585](https://peps.python.org/pep-0585/), these are in `collections.abc` instead of `typing` from Python 3.9.
+## Setup environment variables
 
-# Difficulties
+\footnotesize
 
-## Types versus values
-
-[torch.nn.SmoothL1Loss](https://pytorch.org/docs/stable/generated/torch.nn.SmoothL1Loss.html)
-
-```python
-class SmoothL1Loss(size_average=None, reduce=None, reduction="mean", beta=1.0)
+```yaml
+env:
+  DAY_OF_WEEK: Monday
+jobs:
+  greeting_job:
+    runs-on: ubuntu-latest
+    env:
+      Greeting: Hello
+    steps:
+      - if: ${{ env.DAY_OF_WEEK == 'Monday' }}
+        run: echo "$Greeting $First_Name. Today is $DAY_OF_WEEK!"
+        env:
+          First_Name: Mona
 ```
 
-where `reduction` expects one of `"none"`, `"mean"`, `"sum"`.
+\normalsize
+
+\extrafootnote{https://docs.github.com/en/actions/learn-github-actions/environment-variables}
+
+## Setup environment variables with command evaluation
+
+```yaml
+- run: export HOSTNAME=$(hostname --fqdn)
+- run: echo "$HOSTNAME"
+```
+
+`HOSTNAME` is not available in the second `run` step.
 
 \pause
 
-```python
-class Reduction(Enum):
-  Mean = 0
-  Sum = 1
-class SmoothL1Loss(..., reduction: Optional[Reduction] = Reduction.Mean)
+```yaml
+- run: echo "HOSTNAME=$(hostname --fqdn)" >> $GITHUB_ENV
+- run: echo "$HOSTNAME"
 ```
 
-## Untyped (weakly typed) libraries
+`HOSTNAME` will be available for all steps after it.
 
-```python
-arr: numpy.ndarray = numpy.array([1, 2, 3])
-mask: torch.nn.Tensor = tensor != PAD_TOKEN
+\extrafootnote{https://stackoverflow.com/a/57969570}
+
+# Rough corners
+
+## Development process
+
+Normally you have to **push to GitHub** to test.
+
+\pause
+
+There are tools like [`act`](https://github.com/nektos/act) for local runs.
+
+\pause
+
+However,
+
+- They usually requires docker.
+- You need to set up secrets locally (like keys).
+
+## Gayaml (the GitHub Actions flavor of yaml)
+
+- No [anchors and aliases](https://yaml.org/spec/1.2.2/#3222-anchors-and-aliases) (`&anchor` and `*anchor`)
+
+\pause
+
+- Context expansion may cause syntax errors
+
+```
+strategy:
+  matrix:
+    device: [cpu, gpu]
+runs-on: [self-hosted, ${{ matrix.device }}]
 ```
 
 \pause
 
-What is the shape?
+but this works:
 
-What is the `dtype`?
-
-## Mathematical symbols
-
-Suppose $R$ is the radius of a sphere.
-
-Then the volume can be calculated with the following formula:
-
-$$V = \frac{4\pi}{3} R^3$$
-
-## Code
-
-```hs
-data Maybe a = Just a | Nothing
+```yaml
+runs-on:
+  - self-hosted
+  - ${{ matrix.device }}
 ```
 
-## Inline LaTeX
+## Context availability
 
-\begin{center}
-  \emph{Hello, World!}
-\end{center}
+```yaml
+test-context:
+  steps:
+    - name: ${{ github.job }}
+      run: ...
+    - run: echo ${{ github.job }}
+```
 
-## References
+`github.job` is a context for the job id (i.e. the string `test-context`).
 
-- PEP484 Type Hints: https://peps.python.org/pep-0484/
+However, the expansion is empty in the first step, the expected value in the second.
+
+In some case, it even becomes `run`.
+
+\pause
+
+`github.job` is not available until the job actually runs.
+

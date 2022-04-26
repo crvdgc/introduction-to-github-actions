@@ -1,19 +1,22 @@
 \usepackage{amsmath, amsfonts, amssymb}
 \usetheme{metropolis}
-\usepackage{FiraSans}
+%\usepackage{FiraSans}
+\usepackage[sfdefault]{FiraSans}
+\usepackage{FiraMono}
 
 % Japanese support
-\usepackage[utf8]{inputenc}
-\usepackage{xeCJK}
-\setCJKmainfont{IPAexMincho}
-\setCJKsansfont{IPAexGothic}
-\setCJKmonofont{IPAexGothic}
+% \usepackage[utf8]{inputenc}
+% \usepackage{xeCJK}
+% \setCJKmainfont{IPAexMincho}
+% \setCJKsansfont{IPAexGothic}
+% \setCJKmonofont{IPAexGothic}
 % \setmainfont{ipamp.ttf}
 % \setsansfont{ipagp.ttf}
 % \setmonofont{ipag.ttf}
 
 % Add TOC at the beginning of each section
-\AtBeginSection[]{\begin{frame}
+\AtBeginSection[]{
+    \begin{frame}
         \frametitle{Outline}
         \tableofcontents[currentsection, currentsubsection, subsectionstyle=show/shaded/hide]
     \end{frame}
@@ -22,7 +25,7 @@
 % Toggle text font between Sans Serif & Serif (math mode font unchanged)
 %   \renewcommand{\familydefault}{}           # sans serif
 %   \renewcommand{\familydefault}{\sfdefault} # serif
-\renewcommand{\familydefault}{\sfdefault}
+% \renewcommand{\familydefault}{\sfdefault}
 
 % Dummy command to enable markdown inside raw latex
 % example:
@@ -51,3 +54,12 @@
 \setbeamercolor{title}{fg=DeepBlue}
 \setbeamercolor{frametitle}{bg=DeepBlue}
 \setbeamercolor{structure}{bg=DeepBlue}
+
+% https://tex.stackexchange.com/a/544121
+\newcommand\extrafootnote[1]{%
+    \bgroup
+    \renewcommand\thefootnote{\fnsymbol{footnote}}%
+    \renewcommand\thempfootnote{\fnsymbol{mpfootnote}}%
+    \footnotetext[0]{#1}%
+    \egroup
+}
