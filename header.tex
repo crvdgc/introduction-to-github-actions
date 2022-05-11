@@ -1,6 +1,5 @@
 \usepackage{amsmath, amsfonts, amssymb}
 \usetheme{metropolis}
-%\usepackage{FiraSans}
 \usepackage[sfdefault]{FiraSans}
 \usepackage{FiraMono}
 
@@ -55,11 +54,9 @@
 \setbeamercolor{frametitle}{bg=DeepBlue}
 \setbeamercolor{structure}{bg=DeepBlue}
 
-% https://tex.stackexchange.com/a/544121
-\newcommand\extrafootnote[1]{%
-    \bgroup
-    \renewcommand\thefootnote{\fnsymbol{footnote}}%
-    \renewcommand\thempfootnote{\fnsymbol{mpfootnote}}%
-    \footnotetext[0]{#1}%
-    \egroup
+% https://tex.stackexchange.com/a/347247
+\newcommand{\extrafootnote}[1]{
+    \renewcommand{\thefootnote}{}
+    \footnotetext{\hspace{-8pt}\scriptsize#1}
+    \renewcommand{\thefootnote}{\arabic{footnote}}
 }

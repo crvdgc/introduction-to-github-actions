@@ -1,7 +1,8 @@
 ---
 title: CI/CD with GitHub Actions
-author: Liu Yuxi
-date: 2022-04
+author: Liu Yuxi (<liu.yuxi@cross-compass.com>)
+institute: Cross Compass Ltd. (<https://www.cross-compass.com/>)
+date: 2022-05-10
 ---
 
 # Introduction
@@ -60,7 +61,7 @@ Setup hierarchy:
 
 ![Runtime overview](assets/img/overview-actions-simple.png)
 
-\extrafootnote{https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions}
+\extrafootnote{\url{https://docs.github.com/en/actions/learn-github-actions/understanding-github-actions}}
 
 ## Advantages of GitHub Actions
 
@@ -92,6 +93,36 @@ Setup hierarchy:
 
 # Techniques
 
+## Expressions
+
+Use `${{ <expression> }}` to pragmatically generate configuration.
+
+\pause
+
+- **Literals**: `null`, `true`, `42`, `'spam'`
+- **Operators**: `matrix.device == 'cpu'`
+- **Functions**:
+  - `contains('Hello world', 'llo')`
+  - `format('Hello {0} {1} {2}', 'Mona', 'the', 'Octocat')`
+  - `toJSON(job)`
+- **Job status**: `cancelled()`
+- **Object filters**: `fruits.*.name`
+
+\extrafootnote{\url{https://docs.github.com/en/actions/learn-github-actions/expressions}}
+
+## Contexts
+
+Variables of workflow information, `${{ <context> }}`
+
+\pause
+
+Conditional execution example:
+
+```yaml
+- run: mkdir ${{ github.job }}
+  if: ${{ github.ref == 'refs/heads/main' }}
+```
+
 ## Triggering a workflow
 
 ```yaml
@@ -108,7 +139,7 @@ on:
       - '!releases/**-alpha'
 ```
 
-\extrafootnote{https://docs.github.com/en/actions/using-workflows/triggering-a-workflow}
+\extrafootnote{\url{https://docs.github.com/en/actions/using-workflows/triggering-a-workflow}}
 
 ## Jobs: dependency
 
@@ -124,7 +155,7 @@ jobs:
     needs: [job1, job2]
 ```
 
-\extrafootnote{https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions}
+\extrafootnote{\url{https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions}}
 
 ## Jobs: runner selection
 
@@ -134,6 +165,10 @@ Use a set of labels to select a runner.
   - `runs-on: windows-latest`
 - Self-hosted
   - `runs-on: [self-hosted, x86_64-linux, docker]`
+
+\pause
+
+A runner will be selected if it has **all** of the labels.
 
 \pause
 
@@ -163,8 +198,37 @@ strategy:
 
 \normalsize
 
-\extrafootnote{https://docs.github.com/en/actions/using-jobs/using-a-build-matrix-for-your-jobs}
+\extrafootnote{\url{https://docs.github.com/en/actions/using-jobs/using-a-build-matrix-for-your-jobs}}
 
+## Timeout
+
+```yaml
+jobs:
+  job1:
+    timeout-minutes: 480
+    steps:
+      - run: nix build
+      - timeout-minutes: 120
+```
+
+\extrafootnote{\url{https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions\#jobsjob\_idstepstimeout-minutes}}
+
+## Default environment variables
+
+\footnotesize
+
+```bash
+$ printenv
+...
+RUNNER_TRACKING_ID=github_6d8c2243-acee-49c5-8c10-f774111d02bc
+GITHUB_REPOSITORY_OWNER=xc-jp
+GITHUB_ACTIONS=true
+CI=true
+...
+```
+\normalsize
+
+\extrafootnote{\url{https://docs.github.com/en/enterprise-server@3.4/actions/learn-github-actions/environment-variables\#default-environment-variables}}
 
 ## Setup environment variables
 
@@ -187,9 +251,9 @@ jobs:
 
 \normalsize
 
-\extrafootnote{https://docs.github.com/en/actions/learn-github-actions/environment-variables}
+\extrafootnote{\url{https://docs.github.com/en/actions/learn-github-actions/environment-variables}}
 
-## Setup environment variables with command evaluation
+## Setup environment variables from the script
 
 ```yaml
 - run: export HOSTNAME=$(hostname --fqdn)
@@ -207,9 +271,88 @@ jobs:
 
 `HOSTNAME` will be available for all steps after it.
 
-\extrafootnote{https://stackoverflow.com/a/57969570}
+\extrafootnote{\url{https://stackoverflow.com/a/57969570}}
+
+## Setup environment variables from the script (Cont.)
+
+```yaml
+- run: echo "HOSTNAME=$(hostname --fqdn)" >> $GITHUB_ENV
+- run: echo "$HOSTNAME"
+```
+
+Under the hood, appending to a temporary file:
+
+```bash
+$ echo $GITHUB_ENV
+/run/github-runner/.../_temp/_runner_file_commands/
+set_env_63e44268-e0e8-4bfc-839e-e8aed075a6b6
+```
+
+## Artifact and log
+
+**Definition**: persistent data after the workflow run
+
+\pause
+
+Retention period (default: 90 days)
+
+- Public: 1~90 days
+- Private: 1~400 days
+
+\pause
+
+Also constrained by:
+
+- Organization/enterprise policy
+- Storage limit (may generate billing)
+
+\extrafootnote{\url{https://docs.github.com/en/actions/using-workflows/storing-workflow-data-as-artifacts}}
+
+
+## Artifact and log (Cont.)
+
+For hosted artifact storage:
+
+- `actions/upload-artifact`\footnote{\url{https://github.com/actions/upload-artifact}}
+- `actions/download-artifact`\footnote{\url{https://github.com/actions/download-artifact}}
+
+## Artifact and log (Cont.)
+
+Our solution for hosted runners:
+
+`upload-artifacts "Result tarballs" ${{ github.job }} result '*.tar.gz'`
+
+- Each file is stored to a `s3` bucket.
+- A public link is added to the log.
+- Links are grouped.
+- Only those who has access to the log has access to the artifacts.
+- The retention policy is set separately.
+
+## Artifact and log (Cont.)
+
+`upload-artifacts "Result tarballs" ${{ github.job }} result '*.tar.gz'`
+
+\footnotesize
+
+```bash
+echo "::group::$1"
+UUID="$(uuidgen)"
+export TARGET="$2/$UUID"
+find -L "$3" -name "$4" -type f \
+    -exec aws s3 cp {} "s3://.../$TARGET/" --only-show-errors \; \
+    -exec sh -c 'echo "https://.../$TARGET/$(basename {})"' \;
+echo "::endgroup::"
+```
+
+\normalsize
 
 # Rough corners
+
+## Hard to see runner status
+
+The runner status overview is only available in configurations.
+
+Not every developer has configuration access.
 
 ## Development process
 
@@ -261,13 +404,78 @@ test-context:
     - run: echo ${{ github.job }}
 ```
 
-`github.job` is a context for the job id (i.e. the string `test-context`).
-
-However, the expansion is empty in the first step, the expected value in the second.
-
-In some case, it even becomes `run`.
+`github.job`: job id (i.e. `test-context`)
 
 \pause
 
-`github.job` is not available until the job actually runs.
+However, actually:
+
+- First step: empty
+- Second step: `test-context`
+
+In some cases, it even becomes `run`.
+
+## Context availability (Cont.)
+
+> `github.job` is not available until the job actually runs.
+
+but it's not clear when.
+
+\extrafootnote{\url{https://docs.github.com/en/actions/learn-github-actions/contexts\#context-availability}}
+
+## Isolation?
+
+```yaml
+- run: mkdir test-dir
+```
+
+Where is `test-dir` after the run? Is it cleared?
+
+\pause
+
+\footnotesize
+
+```bash
+$ sudo ls -la /run/github-runner/.../ci-experiments/ci-experiments \
+  | tail -n +2 | tr -s ' ' | cut -d' ' -f1,3,4,9
+drwx--x--x github-runner github-runner .
+drwx--x--x github-runner github-runner ..
+drwx--x--x github-runner github-runner .git
+drwx--x--x github-runner github-runner .github
+drwx--x--x github-runner github-runner test-dir
+```
+\normalsize
+
+\pause
+
+Permission `711` with the `github-runner` user as the owner.
+
+Overwritten upon the next run.
+
+# Personal experience
+
+## Workflows or jobs?
+
+How to group jobs into workflows?
+
+\pause
+
+> - Different trigger conditions $\rightarrow$ different workflows
+> - Job dependencies $\rightarrow$ same workflow
+> - Share same workflow environment $\rightarrow$ same workflow
+
+\pause
+
+Other than these, logical relations.
+
+## General comments
+
+> - CI/CD is very useful
+>   - Automate testing
+>   - Enforce policies for collaborative projects
+> - Nix is a very helpful
+>   - "Migrate" by mere copying
+>   - Add ad hoc dependency: `nix run nixpkgs#hello`
+>   - Set up runner machines
+
 
