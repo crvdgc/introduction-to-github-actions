@@ -1,0 +1,41 @@
+name: "Show case"
+on: push
+jobs:
+    example-job:
+        env:
+            WEATHER: GOOD
+        runs-on:
+            - ubuntu-latest
+        steps:
+            - uses: actions/checkout@v3
+            - name: report weather
+              if: ${{ env.WEATHER == 'GOOD' }}
+              run: echo "Weather condition is $WEATHER"
+            - run: pwd
+            - run: ls -la
+            - run: printenv
+            - run: echo $TEST_VAR
+            - run: export TEST_VAR='VALUE'
+            - run: echo $TEST_VAR
+            - run: echo $GITHUB_ENV
+            - run: echo "TEST_VAR='VALUE'" >> $GITHUB_ENV
+            - run: cat $GITHUB_ENV
+            - run: echo $TEST_VAR
+            - run: |
+                echo '::group::Group test'
+                for i in 3 2 1 boom
+                do
+                    echo $i
+                done
+                echo '::endgroup::'
+
+    after-job:
+        needs: example-job
+        runs-on:
+            - ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v3
+            - run: echo "Currently executing $JOB"
+              env:
+                  JOB: ${{ github.job }}
